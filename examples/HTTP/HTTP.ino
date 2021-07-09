@@ -1,7 +1,7 @@
 /*
     Description: 
-    Use ATOM DTU NB to connect to the MQTT server, and implement subscription and publishing messages.
-    Check the status through Serial. When the MQTT connection is successful, Click Btn Public Topic
+    Use ATOM DTU NB Create HTTP request GET / POST.
+    Check the status through Serial.
     Please install library before compiling:  
     FastLED: https://github.com/FastLED/FastLED
     M5Atom: https://github.com/m5stack/M5Atom
