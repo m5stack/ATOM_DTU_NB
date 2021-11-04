@@ -10,68 +10,56 @@
 #include "ATOM_DTU_NB.h"
 #include "M5Atom.h"
 
-ATOM_DTU_NB DTU;
+ATOM_DTU_NB dtu;
 
 void setup()
 {
     M5.begin(true, true, true);
     //SIM7020
-    DTU.Init(&Serial2, 19, 22);
-    // DTU.Init();
-    //Reset Module
-    DTU.sendMsg("AT+CRESET\r\n");
-    delay(5000);
+    dtu.init(&Serial2, 19, 22);
+    dtu.reset_device();
     M5.dis.drawpix(0, 0xff0000);
 }
 
-String readstr;
+String response;
+
+void show_query(String command, timeout=1000) 
+{
+  Serial.println(dtu.send_query(command, timeout=timeout).to_string());
+}
 
 void loop()
 {
 
-    DTU.sendMsg("AT+CSMINS=?\r\n");
-    readstr = DTU.waitMsg(1000);
-    Serial.print(readstr);
+    show_query("AT+CSMINS=?");
 
     while(1){
-        DTU.sendMsg("AT+CSQ\r\n");
-        readstr = DTU.waitMsg(1000);
-        Serial.print(readstr);
-        if(readstr.indexOf("0,0") ==-1 && readstr.indexOf("99") ==-1 ){
+        response = dtu.send_query("AT+CSQ\r\n")
+        Serial.print(response.to_string());
+        if(readstr.payload().indexOf("0,0") == -1){
             break;
         }
     }
 
-    DTU.sendMsg("AT+CREG?\r\n");
-    readstr = DTU.waitMsg(1000);
-    Serial.print(readstr);
-
-    DTU.sendMsg("AT+COPS?\r\n");
-    readstr = DTU.waitMsg(1000);
-    Serial.print(readstr);
+    show_query("AT+CREG?");
+    show_query("AT+COPS?");
 
     //Create HTTP host instance
-    DTU.sendMsg("AT+CHTTPCREATE=\"http://api.m5stack.com/\"\r\n");
-    readstr = DTU.waitMsg(5000);
-    Serial.print(readstr);
+    show_query("AT+CHTTPCREATE=\"http://api.m5stack.com/\"", timeout=5000);
 
     //Connect server
-    DTU.sendMsg("AT+CHTTPCON=0\r\n");
-    readstr = DTU.waitMsg(5000);
-    Serial.print(readstr);
+    show_query("AT+CHTTPCON=0", timeout=5000);
 
     //HTTP GET
-    DTU.sendMsg("AT+CHTTPSEND=0,0,\"/v1\"\r\n");
-    readstr = DTU.waitMsg(5000);
-    Serial.print(readstr);
+    response = dtu.send_query("AT+CHTTPSEND=0,0,\"/v1\"", timeout=5000);
+    Serial.println(response.to_string());
 
     //HTTP POST
-    // DTU.sendMsg("AT+CHTTPSEND=0,1,\"/v1\",48656c6c6f204d352055736572\r\n");
-    // readstr = DTU.waitMsg(5000);
-    // Serial.print(readstr);
+    //response = show_query("AT+CHTTPSEND=0,1,\"/v1\",48656c6c6f204d352055736572", timeout=5000);
+    //Serial.println(response.to_string());
 
 
-    if(readstr.indexOf("OK") !=-1){
+    if(response.status().indexOf("OK") !=-1){
       M5.dis.drawpix(0, 0x0000ff);
       while(Serial2.available()){
           Serial.print(Serial2.readString());
@@ -80,9 +68,7 @@ void loop()
       M5.dis.drawpix(0, 0x00ff00);
     }
 
-    DTU.sendMsg("AT+CHTTPDISCON=0\r\n");
-    DTU.sendMsg("AT+CHTTPDESTROY=0\r\n");
-    readstr = DTU.waitMsg(1000);
-    Serial.print(readstr);
+    dtu.write("AT+CHTTPDISCON=0");
+    show_query("AT+CHTTPDESTROY=0", timeout=5000);
 
 }
