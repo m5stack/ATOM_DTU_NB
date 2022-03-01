@@ -10,70 +10,57 @@
 #include "ATOM_DTU_NB.h"
 #include "M5Atom.h"
 
-ATOM_DTU_NB DTU;
+ATOM_DTU_NB dtu;
 
 void setup()
 {
     M5.begin();
     //SIM7020
-    DTU.Init(&Serial2, 19, 22);
-    // DTU.Init();
-    //Reset Module
-    DTU.sendMsg("AT+CRESET\r\n");
-    delay(5000);
+    dtu.init(&Serial2, 19, 22);
+    dtu.reset_device();
 }
 
-String readstr;
+String response;
+
+void show_query(String command, timeout=1000) 
+{
+  Serial.println(dtu.send_query(command, timeout=timeout).to_string());
+}
 
 void loop()
 {
-
-    DTU.sendMsg("AT+CSMINS=?\r\n");
-    readstr = DTU.waitMsg(1000);
-    Serial.print(readstr);
+    show_query("AT+CSMINS=?");
 
     while(1){
-        DTU.sendMsg("AT+CSQ\r\n\r\n");
-        readstr = DTU.waitMsg(1000);
-        Serial.print(readstr);
-        if(readstr.indexOf("0,0") ==-1){
+        response = dtu.send_query("AT+CSQ\r\n")
+        Serial.print(response.to_string());
+        if(readstr.payload().indexOf("0,0") == -1){
             break;
         }
     }
 
-    DTU.sendMsg("AT+CREG?\r\n");
-    readstr = DTU.waitMsg(1000);
-    Serial.print(readstr);
-
-    DTU.sendMsg("AT+COPS?\r\n");
-    readstr = DTU.waitMsg(1000);
-    Serial.print(readstr);
+    show_query("AT+CREG?");
+    show_query("AT+COPS?");
 
     //Create MQTT connection
     //If succeed, MQTT id will return.
-    DTU.sendMsg("AT+CMQNEW=\"broker.emqx.io\",\"1883\",12000,1024\r\n");
-    readstr = DTU.waitMsg(5000);
-    Serial.print(readstr);
 
-    DTU.sendMsg("AT+CMQCON=0,3,\"myclient\",600,1,0\r\n");
-    readstr = DTU.waitMsg(5000);
-    Serial.print(readstr);
+    show_query("AT+CMQNEW=\"broker.emqx.io\",\"1883\",12000,1024", timeout=5000);
+    response = dtu.send_query("AT+CMQCON=0,3,\"myclient\",600,1,0", timeout=5000);
+    Serial.println(response.to_string());
 
-    if(readstr.indexOf("OK") !=-1){
-        DTU.sendMsg("AT+CMQSUB=0,\"mytopic\",1\r\n");
-        readstr = DTU.waitMsg(5000);
-        Serial.print(readstr);
+    if(response.status().indexOf("OK") !=-1){
+        show_query("AT+CMQSUB=0,\"mytopic\",1", timeout=5000);
         
         while(1){
             M5.update();
-            readstr = DTU.waitMsg(0);
+            readstr = dtu.wait_message(0);
             Serial.print(readstr);
             //Click Btn Public Topic
             if(M5.Btn.wasPressed()){
-                DTU.sendMsg("AT+CMQPUB=0,\"mytopic\",1,0,0,8,\"31323334\"\r\n");
-                readstr = DTU.waitMsg(5000);
-                Serial.print(readstr);
-                if(readstr.indexOf("ERR") !=-1) {
+                response = dtu.send_query("AT+CMQPUB=0,\"mytopic\",1,0,0,8,\"31323334\"", timeout=5000);
+                Serial.print(response.to_string());
+                if(response.status().indexOf("ERR") !=-1) {
                     ESP.restart();
                 }
             }
