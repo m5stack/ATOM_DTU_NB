@@ -10,6 +10,7 @@ Contains M5Stack-**ATOM DTU NB** series related case programs. The hardware is b
 - [Arduino485](https://github.com/m5stack/ArduinoRS485)
 - [TinyGSM](https://github.com/vshymanskyy/TinyGSM)
 - [PubSubClient](https://github.com/knolleary/pubsubclient.git)
+- [ArduinoHttpClient](https://github.com/arduino-libraries/ArduinoHttpClient)
 
 ## Related Link
 
