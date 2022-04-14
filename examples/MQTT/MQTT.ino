@@ -1,82 +1,110 @@
-/*
-    Description: 
-    Use ATOM DTU NB to connect to the MQTT server, and implement subscription and publishing messages.
-    Check the status through Serial. When the MQTT connection is successful, Click Btn Public Topic
-    Please install library before compiling:  
-    FastLED: https://github.com/FastLED/FastLED
-    M5Atom: https://github.com/m5stack/M5Atom
-*/
-
+#include <M5Atom.h>
 #include "ATOM_DTU_NB.h"
-#include "M5Atom.h"
+#include <PubSubClient.h>
+#include <TinyGsmClient.h>
+#include <time.h>
+#include <sys/time.h>
 
-ATOM_DTU_NB DTU;
+#define MQTT_BROKER   "mqtt.m5stack.com"
+#define MQTT_PORT     1883
+#define MQTT_USERNAME "DTU_NB"
+#define MQTT_PASSWORD "DTU_PWD"
+#define MQTT_D_TOPIC  "DTU_NB/D"
+#define MQTT_U_TOPIC  "DTU_NB/U"  //  上传数据主题
 
-void setup()
-{
-    M5.begin();
-    //SIM7020
-    DTU.Init(&Serial2, 19, 22);
-    // DTU.Init();
-    //Reset Module
-    DTU.sendMsg("AT+CRESET\r\n");
-    delay(5000);
+#define UPLOAD_INTERVAL 10000
+uint32_t lastReconnectAttempt = 0;
+
+TinyGsm modem(SerialAT, ATOM_DTU_SIM7020_RESET);
+
+TinyGsmClient tcpClient(modem);
+PubSubClient mqttClient(MQTT_BROKER, MQTT_PORT, tcpClient);
+
+void mqttCallback(char *topic, byte *payload, unsigned int len);
+bool mqttConnect(void);
+void nbConnect(void);
+
+// Your GPRS credentials, if any
+const char apn[]      = "YourAPN";
+const char gprsUser[] = "";
+const char gprsPass[] = "";
+
+struct tm now;
+char s_time[50];
+
+void log(String info) {
+    SerialMon.println(info);
 }
 
-String readstr;
+void setup() {
+    M5.begin(true, false, true);
+    Serial.println(">>ATOM DTU NB MQTT TEST");
+    SerialAT.begin(SIM7020_BAUDRATE, SERIAL_8N1, ATOM_DTU_SIM7020_RX,
+                   ATOM_DTU_SIM7020_TX);
+    M5.dis.fillpix(0x0000ff);
+    nbConnect();
+    mqttClient.setCallback(mqttCallback);
+}
 
-void loop()
-{
+void loop() {
+    static unsigned long timer = 0;
 
-    DTU.sendMsg("AT+CSMINS=?\r\n");
-    readstr = DTU.waitMsg(1000);
-    Serial.print(readstr);
-
-    while(1){
-        DTU.sendMsg("AT+CSQ\r\n\r\n");
-        readstr = DTU.waitMsg(1000);
-        Serial.print(readstr);
-        if(readstr.indexOf("0,0") ==-1){
-            break;
-        }
-    }
-
-    DTU.sendMsg("AT+CREG?\r\n");
-    readstr = DTU.waitMsg(1000);
-    Serial.print(readstr);
-
-    DTU.sendMsg("AT+COPS?\r\n");
-    readstr = DTU.waitMsg(1000);
-    Serial.print(readstr);
-
-    //Create MQTT connection
-    //If succeed, MQTT id will return.
-    DTU.sendMsg("AT+CMQNEW=\"broker.emqx.io\",\"1883\",12000,1024\r\n");
-    readstr = DTU.waitMsg(5000);
-    Serial.print(readstr);
-
-    DTU.sendMsg("AT+CMQCON=0,3,\"myclient\",600,1,0\r\n");
-    readstr = DTU.waitMsg(5000);
-    Serial.print(readstr);
-
-    if(readstr.indexOf("OK") !=-1){
-        DTU.sendMsg("AT+CMQSUB=0,\"mytopic\",1\r\n");
-        readstr = DTU.waitMsg(5000);
-        Serial.print(readstr);
-        
-        while(1){
-            M5.update();
-            readstr = DTU.waitMsg(0);
-            Serial.print(readstr);
-            //Click Btn Public Topic
-            if(M5.Btn.wasPressed()){
-                DTU.sendMsg("AT+CMQPUB=0,\"mytopic\",1,0,0,8,\"31323334\"\r\n");
-                readstr = DTU.waitMsg(5000);
-                Serial.print(readstr);
-                if(readstr.indexOf("ERR") !=-1) {
-                    ESP.restart();
-                }
+    if (!mqttClient.connected()) {
+        log(">>MQTT NOT CONNECTED");
+        // Reconnect every 10 seconds
+        M5.dis.fillpix(0xff0000);
+        uint32_t t = millis();
+        if (t - lastReconnectAttempt > 3000L) {
+            lastReconnectAttempt = t;
+            if (mqttConnect()) {
+                lastReconnectAttempt = 0;
             }
         }
+        delay(100);
     }
+    if (millis() >= timer) {
+        timer = millis() + UPLOAD_INTERVAL;
+        mqttClient.publish(MQTT_U_TOPIC, "hello");  // 发送数据
+    }
+    M5.dis.fillpix(0x00ff00);
+    mqttClient.loop();
+}
+
+void mqttCallback(char *topic, byte *payload, unsigned int len) {
+    char info[len];
+    memcpy(info, payload, len);
+    log("Message arrived [" + String(topic) + "]: ");
+    log(info);
+}
+
+bool mqttConnect(void) {
+    log("Connecting to ");
+    log(MQTT_BROKER);
+    // Connect to MQTT Broker
+    String mqttid = ("MQTTID_" + String(random(65536)));
+    bool status =
+        mqttClient.connect(mqttid.c_str(), MQTT_USERNAME, MQTT_PASSWORD);
+    if (status == false) {
+        log(" fail");
+        return false;
+    }
+    log("MQTT CONNECTED!");
+    mqttClient.publish(MQTT_U_TOPIC, "NB MQTT CLIENT ONLINE");
+    mqttClient.subscribe(MQTT_D_TOPIC);
+    return mqttClient.connected();
+}
+
+void nbConnect(void) {
+    unsigned long start = millis();
+    log("Initializing modem...");
+    while (!modem.init()) {
+        log("waiting...." + String((millis() - start) / 1000) + "s");
+    };
+
+    start = millis();
+    log("Waiting for network...");
+    while (!modem.waitForNetwork()) {
+        log("waiting...." + String((millis() - start) / 1000) + "s");
+    }
+    log("success");
 }

@@ -1,88 +1,93 @@
-/*
-    Description: 
-    Use ATOM DTU NB to connect to the MQTT server, and implement subscription and publishing messages.
-    Check the status through Serial. When the MQTT connection is successful, Click Btn Public Topic
-    Please install library before compiling:  
-    FastLED: https://github.com/FastLED/FastLED
-    M5Atom: https://github.com/m5stack/M5Atom
-*/
-
+#include <M5Atom.h>
 #include "ATOM_DTU_NB.h"
-#include "M5Atom.h"
+#include <TinyGsmClient.h>
+#include <ArduinoHttpClient.h>
+#include <time.h>
+#include <sys/time.h>
 
-ATOM_DTU_NB DTU;
+const char server[] = "api.m5stack.com";
+const char resource[] = "/v1";
+const int  port = 80;
 
-void setup()
-{
-    M5.begin(true, true, true);
-    //SIM7020
-    DTU.Init(&Serial2, 19, 22);
-    // DTU.Init();
-    //Reset Module
-    DTU.sendMsg("AT+CRESET\r\n");
-    delay(5000);
-    M5.dis.drawpix(0, 0xff0000);
+TinyGsm modem(SerialAT, ATOM_DTU_SIM7020_RESET);
+TinyGsmClient tcpClient(modem);
+HttpClient http(tcpClient, server, port);
+
+void nbConnect(void);
+
+// Your GPRS credentials, if any
+const char apn[]      = "YourAPN";
+const char gprsUser[] = "";
+const char gprsPass[] = "";
+
+struct tm now;
+char s_time[50];
+
+void log(String info) {
+    SerialMon.println(info);
 }
 
-String readstr;
+void setup() {
+    M5.begin(true, false, true);
+    Serial.println(">>ATOM DTU NB HTTP TEST");
+    SerialAT.begin(SIM7020_BAUDRATE, SERIAL_8N1, ATOM_DTU_SIM7020_RX,
+                   ATOM_DTU_SIM7020_TX);
+    M5.dis.fillpix(0x0000ff);
+    nbConnect();
+}
 
-void loop()
-{
+void loop() {
 
-    DTU.sendMsg("AT+CSMINS=?\r\n");
-    readstr = DTU.waitMsg(1000);
-    Serial.print(readstr);
+  log("Performing HTTP GET request... ");
+  int err = http.get(resource);
+  if (err != 0) {
+    log("failed to connect");
+    delay(1000);
+    return;
+  }
 
-    while(1){
-        DTU.sendMsg("AT+CSQ\r\n\r\n");
-        readstr = DTU.waitMsg(1000);
-        Serial.print(readstr);
-        if(readstr.indexOf("0,0") ==-1 || readstr.indexOf("99") ==-1 ){
-            break;
-        }
+  int status = http.responseStatusCode();
+  log("Response status code: ");
+  log(status);
+  if (!status) {
+    delay(10000);
+    return;
+  }
+
+  log("Response Headers:");
+  while (http.headerAvailable()) {
+    String headerName = http.readHeaderName();
+    String headerValue = http.readHeaderValue();
+    log("    " + headerName + " : " + headerValue);
+  }
+
+  int length = http.contentLength();
+  if (length >= 0) {
+    log("Content length is: ");
+    log(length);
+  }
+  if (http.isResponseChunked()) {
+    log("The response is chunked");
+  }
+  String body = http.responseBody();
+  log("Response:");
+  log(body);
+  // Shutdown
+  http.stop();
+  delay(5000);
+}
+
+void nbConnect(void) {
+    unsigned long start = millis();
+    log("Initializing modem...");
+    while (!modem.init()) {
+        log("waiting...." + String((millis() - start) / 1000) + "s");
+    };
+
+    start = millis();
+    log("Waiting for network...");
+    while (!modem.waitForNetwork()) {
+        log("waiting...." + String((millis() - start) / 1000) + "s");
     }
-
-    DTU.sendMsg("AT+CREG?\r\n");
-    readstr = DTU.waitMsg(1000);
-    Serial.print(readstr);
-
-    DTU.sendMsg("AT+COPS?\r\n");
-    readstr = DTU.waitMsg(1000);
-    Serial.print(readstr);
-
-    //Create HTTP host instance
-    DTU.sendMsg("AT+CHTTPCREATE=\"http://api.m5stack.com/\"\r\n");
-    readstr = DTU.waitMsg(5000);
-    Serial.print(readstr);
-
-    //Connect server
-    DTU.sendMsg("AT+CHTTPCON=0\r\n");
-    readstr = DTU.waitMsg(5000);
-    Serial.print(readstr);
-
-    //HTTP GET
-    DTU.sendMsg("AT+CHTTPSEND=0,0,\"/v1\"\r\n");
-    readstr = DTU.waitMsg(5000);
-    Serial.print(readstr);
-
-    //HTTP POST
-    // DTU.sendMsg("AT+CHTTPSEND=0,1,\"/v1\",48656c6c6f204d352055736572\r\n");
-    // readstr = DTU.waitMsg(5000);
-    // Serial.print(readstr);
-
-
-    if(readstr.indexOf("OK") !=-1){
-      M5.dis.drawpix(0, 0x0000ff);
-      while(Serial2.available()){
-          Serial.print(Serial2.readString());
-      }
-    }else{
-      M5.dis.drawpix(0, 0x00ff00);
-    }
-
-    DTU.sendMsg("AT+CHTTPDISCON=0\r\n");
-    DTU.sendMsg("AT+CHTTPDESTROY=0\r\n");
-    readstr = DTU.waitMsg(1000);
-    Serial.print(readstr);
-
+    log("success");
 }
