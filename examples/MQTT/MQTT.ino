@@ -6,7 +6,7 @@
 information：https://docs.m5stack.com/en/atom/atom_dtu_nb
 * describe: ATOM DTU NB MQTT Clien Example.
 * Libraries:
-    - [TinyGSM](https://github.com/vshymanskyy/TinyGSM)
+    - [TinyGSM - modify](https://m5stack.oss-cn-shenzhen.aliyuncs.com/resource/arduino/lib/TinyGSM.zip)
     - [PubSubClient](https://github.com/knolleary/pubsubclient.git)
 * date：2022/4/14
 *******************************************************************************

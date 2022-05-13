@@ -6,7 +6,7 @@
 information：https://docs.m5stack.com/en/atom/atom_dtu_nb
 * describe: ATOM DTU NB HTTP Clien Example.
 * Libraries:
-    - [TinyGSM](https://github.com/vshymanskyy/TinyGSM)
+    - [TinyGSM - modify](https://m5stack.oss-cn-shenzhen.aliyuncs.com/resource/arduino/lib/TinyGSM.zip)
     - [ArduinoHttpClient](https://github.com/arduino-libraries/ArduinoHttpClient)
 * date：2022/4/14
 *******************************************************************************
