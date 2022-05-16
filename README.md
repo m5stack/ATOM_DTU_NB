@@ -14,7 +14,7 @@ Contains M5Stack-**ATOM DTU NB** series related case programs. The hardware is b
 
 ## Related Link
 
-[Docment & AT Command](https://docs.m5stack.com/en/atom/atom_dtu_nb)
+[Document & AT Command](https://docs.m5stack.com/en/atom/atom_dtu_nb)
 
 ## License
 
